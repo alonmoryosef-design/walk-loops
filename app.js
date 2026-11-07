@@ -302,6 +302,20 @@
     } catch (err) { setStatus('לא הצלחתי לטעון את המסלול: ' + err.message, true); }
   });
 
+  // Explain why location failed, with the fix for the viewer's phone.
+  function geoErrorText(err) {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const inApp = /FBAN|FBAV|Instagram|WhatsApp|Line\/|GSA\//.test(navigator.userAgent);
+    if (err && err.code === 1) {
+      if (inApp) return 'אין הרשאה למיקום. פתחו את האתר בדפדפן עצמו (Safari או Chrome) ולא מתוך אפליקציה אחרת.';
+      return ios
+        ? 'אין הרשאה למיקום. באייפון: הגדרות ← פרטיות ואבטחה ← שירותי מיקום ← Safari (או Chrome) ← "בזמן השימוש ביישום", ואז לרענן את הדף.'
+        : 'אין הרשאה למיקום. לוחצים על סמל המנעול ליד כתובת האתר ← הרשאות ← מיקום ← אפשר, ואז מרעננים את הדף.';
+    }
+    if (err && err.code === 3) return 'לקח יותר מדי זמן למצוא את המיקום. נסו שוב, רצוי בחוץ.';
+    return 'לא הצלחתי לקבל מיקום. בדקו ששירותי המיקום בטלפון מופעלים, או בחרו נקודה על המפה.';
+  }
+
   // ---------- Voice + vibration ----------
   const TURN_TEXT = {
     'left': 'פנה שמאלה', 'right': 'פנה ימינה', 'slight left': 'המשך מעט שמאלה', 'slight right': 'המשך מעט ימינה',
@@ -392,8 +406,8 @@
         return { ...t, idx: best, said: false };
       }).filter(t => t.idx > 2 && t.idx < this.samples.length - 3);
       Voice.say(`מתחילים. ${(r.distanceM / 1000).toFixed(1)} קילומטר.` + (this.turns[0] ? ' ' + turnText(this.turns[0]) + ' בהמשך.' : ''));
-      this.watch = navigator.geolocation.watchPosition(p => this.update(p), () =>
-        $('trackText').textContent = 'אין גישה למיקום. אשר גישה למיקום בדפדפן.', { enableHighAccuracy: true, maximumAge: 2000 });
+      this.watch = navigator.geolocation.watchPosition(p => this.update(p), err =>
+        $('trackText').textContent = geoErrorText(err), { enableHighAccuracy: true, maximumAge: 2000 });
       if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => this.lock = l).catch(() => {});
     },
     update(pos) {
@@ -539,7 +553,7 @@
       setStart(p);
       setStartText(`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`);
       setStatus('');
-    }, () => setStatus('לא הצלחתי לקבל מיקום. אשר גישה למיקום בדפדפן.', true), { enableHighAccuracy: true, timeout: 10000 });
+    }, err => setStatus(geoErrorText(err), true), { enableHighAccuracy: true, timeout: 15000 });
   });
 
   // ---------- Startup ----------
