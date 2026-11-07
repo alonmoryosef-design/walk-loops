@@ -65,6 +65,7 @@
   }
 
   function clearRoutes() {
+    if (typeof hl !== 'undefined') hl.clearLayers();
     poiLayer.clearLayers();
     lines.forEach(l => l.remove());
     lines = [];
@@ -96,13 +97,58 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
-  function select(i) {
+  // ---------- Selected route: line that fills in, direction arrows, km marks ----------
+  const hl = L.layerGroup().addTo(map);
+  let animId = null;
+
+  function decorate(r, color) {
+    hl.clearLayers();
+    if (animId) cancelAnimationFrame(animId);
+    const n = Math.max(50, Math.round(r.distanceM / 10));
+    const pts = LoopRouting.samplePath(r.path, n); // a point every ~10 m
+    const step = r.distanceM / (n - 1);
+    const kx = Math.cos(pts[0].lat * Math.PI / 180);
+    const bearingAt = k => {
+      const a = pts[Math.max(0, k - 2)], b = pts[Math.min(n - 1, k + 2)];
+      return (Math.atan2((b.lng - a.lng) * kx, b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+    };
+    // Direction arrows every ~300 m (fewer on long routes).
+    const every = Math.max(300, r.distanceM / 25);
+    for (let d = every / 2; d < r.distanceM - 50; d += every) {
+      const k = Math.round(d / step);
+      L.marker(pts[k], {
+        interactive: false,
+        icon: L.divIcon({ className: 'arrow', html: `<div style="transform:rotate(${bearingAt(k) - 90}deg);color:${color}">➤</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+      }).addTo(hl);
+    }
+    // Kilometer marks.
+    for (let km = 1; km * 1000 < r.distanceM - 100; km++) {
+      L.marker(pts[Math.round(km * 1000 / step)], {
+        interactive: false,
+        icon: L.divIcon({ className: 'km', html: `<div style="border-color:${color}">${km}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+      }).addTo(hl);
+    }
+    // The line "fills in" from the start over ~1.8 s.
+    const fill = L.polyline([], { color, weight: 7, opacity: 1, interactive: false }).addTo(hl);
+    const t0 = performance.now(), dur = 1800;
+    const tick = now => {
+      const f = Math.min(1, (now - t0) / dur);
+      const e = 1 - Math.pow(1 - f, 3); // ease out
+      fill.setLatLngs(pts.slice(0, Math.max(2, Math.round(e * n))));
+      if (f < 1) animId = requestAnimationFrame(tick); else animId = null;
+    };
+    animId = requestAnimationFrame(tick);
+    return fill;
+  }
+
+  function select(i, fit = true) {
     lines.forEach((l, j) => {
-      l.setStyle({ opacity: j === i ? 0.95 : 0.35, weight: j === i ? 6 : 4 });
+      l.setStyle({ opacity: j === i ? 0.3 : 0.25, weight: j === i ? 7 : 4, dashArray: j === i ? null : '6 8' });
       if (j === i) l.bringToFront();
     });
     document.querySelectorAll('#results li').forEach((li, j) => li.classList.toggle('active', j === i));
-    map.fitBounds(lines[i].getBounds(), { padding: [30, 30] });
+    if (fit) map.fitBounds(lines[i].getBounds(), { padding: [30, 30] });
+    decorate(shown[i], lines[i].options.color);
   }
 
   function routeTitle(r, i) {
@@ -144,11 +190,14 @@
         else if (act === 'gpx') gpxRoute(r, i);
         else if (act === 'pois') showPois(r, li);
         else if (act === 'fav') { toggleFavorite(r, routeTitle(r, i)); e.target.textContent = isFavorite(r) ? '★ שמור' : '☆ שמירה'; }
-        if (e.target.tagName !== 'A') select(i);
+        if (e.target.tagName !== 'A' && act !== 'walk') select(i);
       });
       $('results').appendChild(li);
     });
-    if (group.length) map.fitBounds(L.featureGroup(group).getBounds(), { padding: [30, 30] });
+    if (group.length) {
+      map.fitBounds(L.featureGroup(group).getBounds(), { padding: [30, 30] });
+      select(0, false);
+    }
   }
 
   async function addElevation(routes) {
@@ -179,7 +228,7 @@
 
   // Rebuild one route from its start + waypoints (shared links, favorites).
   async function loadRoute(start, wps, title) {
-    const r = await Providers.fetchRoute(start, wps);
+    const r = LoopRouting.trimSpurs(await Providers.fetchRoute(start, wps));
     const c = wps.reduce((a, p) => ({ lat: a.lat + p.lat / wps.length, lng: a.lng + p.lng / wps.length }), { lat: 0, lng: 0 });
     Object.assign(r, { start, waypoints: wps, bearing: bearingTo(start, c), err: 0, overlap: LoopRouting.overlapRatio(r.path), title });
     await addElevation([r]);
@@ -297,7 +346,6 @@
       setStart(f.start);
       setStartText(f5(f.start));
       showRoutes([await loadRoute(f.start, f.waypoints, '★ ' + f.name)]);
-      select(0);
       setStatus('');
     } catch (err) { setStatus('לא הצלחתי לטעון את המסלול: ' + err.message, true); }
   });
@@ -381,9 +429,11 @@
       this.step = r.distanceM / (n - 1);
       this.idx = 0;
       this.kx = Math.cos(r.path[0].lat * Math.PI / 180) * 111320;
-      this.done = L.polyline([], { color: '#888', weight: 7, opacity: 0.9 }).addTo(map);
+      this.done = L.polyline([], { color, weight: 8, opacity: 1 }).addTo(map);
       this.dot = L.circleMarker(r.path[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#1a73e8', fillOpacity: 1 }).addTo(map);
-      lines.forEach(l => l.setStyle({ opacity: l.options.color === color ? 0.95 : 0.12 }));
+      hl.clearLayers();
+      if (animId) cancelAnimationFrame(animId);
+      lines.forEach(l => l.setStyle({ opacity: l.options.color === color ? 0.3 : 0.08, dashArray: l.options.color === color ? '2 9' : null, weight: 6 }));
       document.body.classList.add('walking');
       map.invalidateSize();
       $('trackBar').hidden = false;
@@ -464,6 +514,7 @@
       this.watch = null;
       if (this.lock) { this.lock.release().catch(() => {}); this.lock = null; }
       if (this.done) this.done.remove();
+      if (this.active) lines.forEach(l => l.setStyle({ dashArray: null }));
       if (this.dot) this.dot.remove();
       this.done = this.dot = null;
       this.active = false;
@@ -512,7 +563,7 @@
       const count = parseInt($('count').value, 10);
       const terrain = $('terrain').value;
       // Try a few extra directions and keep the best ones.
-      const tries = Math.min(count + (terrain === 'any' ? 2 : 3), 9);
+      const tries = Math.min(count + 3, 9);
       setStatus(`מחשב מסלולים… 0/${tries}`);
       const dir = $('direction').value;
       let routes = await LoopRouting.findLoops(startPoint, km * 1000, tries, Providers.fetchRoute,
@@ -521,12 +572,14 @@
       setStatus('בודק עליות…');
       const elevOk = await addElevation(routes);
       if (terrain !== 'any' && elevOk) {
-        const good = routes.filter(r => r.err <= 0.12 && r.overlap <= 0.25);
+        const good = routes.filter(r => r.err <= 0.12 && r.overlap <= 0.12);
         const pool = good.length >= count ? good : routes;
         pool.sort((a, b) => terrain === 'flat' ? a.ascentM - b.ascentM : b.ascentM - a.ascentM);
         routes = pool.slice(0, count);
       } else {
-        routes = routes.slice(0, count); // already sorted: closest length, least retracing
+        // Real loops first (already sorted by closest length + least retracing).
+        const loops = routes.filter(r => r.overlap <= 0.12);
+        routes = loops.concat(routes.filter(r => r.overlap > 0.12)).slice(0, count);
       }
       showRoutes(routes);
       const order = terrain === 'flat' ? ' (מהשטוח ביותר)' : terrain === 'hilly' ? ' (מהתלול ביותר)' : '';
@@ -573,7 +626,6 @@
       setStartText(f5(s));
       setStatus('טוען את המסלול ששותף איתך…');
       showRoutes([await loadRoute(s, wps, 'מסלול ששותף איתך')]);
-      select(0);
       setStatus('זה המסלול ששותף איתך. אפשר גם ליצור מסלולים חדשים מכאן.');
     } catch (err) {
       setStatus('לא הצלחתי לטעון את המסלול מהקישור.', true);

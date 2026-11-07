@@ -55,6 +55,48 @@
     return repeated / n;
   }
 
+  /**
+   * Cut "there and back" spurs out of a loop: a stretch that leaves a point, walks some
+   * street and comes back the same way to that same point. The waypoint that caused it is
+   * simply skipped, so what's left is a real loop. Turn instructions inside a cut are dropped.
+   */
+  function trimSpurs(route) {
+    let total = 0;
+    for (let i = 1; i < route.path.length; i++) total += haversine(route.path[i - 1], route.path[i]);
+    const n = Math.min(1500, Math.max(30, Math.round(total / 12)));
+    const step = total / (n - 1);
+    let pts = samplePath(route.path, n);
+    const kx = Math.cos(toRad(pts[0].lat)) * 111320, ky = 110540;
+    const d2 = (a, b) => { const dx = (a.lng - b.lng) * kx, dy = (a.lat - b.lat) * ky; return dx * dx + dy * dy; };
+    const junctions = [];
+    let cutM = 0;
+    for (let guard = 0; guard < 10; guard++) {
+      let cut = null;
+      outer:
+      for (let i = 0; i < pts.length - 6; i++) {
+        for (let j = pts.length - 1; j >= i + 6; j--) {
+          if (d2(pts[i], pts[j]) > 12 * 12) continue;
+          const half = Math.floor((j - i) / 2);
+          if ((j - i) * step > 0.45 * total) continue; // not a spur: (most of) the loop itself
+          let same = 0;
+          for (let k = 1; k <= half; k++) if (d2(pts[i + k], pts[j - k]) < 20 * 20) same++;
+          if (same >= 0.85 * half) { cut = [i, j]; break outer; }
+        }
+      }
+      if (!cut) break;
+      const [i, j] = cut;
+      junctions.push(pts[i]);
+      cutM += (j - i) * step;
+      pts = pts.slice(0, i + 1).concat(pts.slice(j + 1));
+    }
+    if (!junctions.length) return route;
+    let dist = 0;
+    for (let i = 1; i < pts.length; i++) dist += haversine(pts[i - 1], pts[i]);
+    const near = (p, maxM) => pts.some(q => d2(p, q) < maxM * maxM);
+    const steps = (route.steps || []).filter(t => near(t, 15) && !junctions.some(jn => d2(t, jn) < 25 * 25));
+    return { ...route, path: pts, distanceM: dist, durationS: route.durationS * dist / route.distanceM, steps, trimmedM: cutM };
+  }
+
   // Lower is better: distance error, plus a penalty for walking the same street twice.
   const score = r => r.err + 0.6 * r.overlap;
 
@@ -72,7 +114,7 @@
     for (let i = 0; i < maxIter; i++) {
       const wps = circleWaypoints(start, radius, dir, n);
       let route;
-      try { route = await fetchRoute(start, wps); } catch (e) { if (i === 0) throw e; break; }
+      try { route = trimSpurs(await fetchRoute(start, wps)); } catch (e) { if (i === 0) throw e; break; }
       const cand = { ...route, waypoints: wps, bearing: dir,
         err: Math.abs(route.distanceM - targetM) / targetM, overlap: overlapRatio(route.path) };
       if (!best || score(cand) < score(best)) best = cand;
@@ -161,5 +203,5 @@
     return up;
   }
 
-  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline, samplePath, ascent, overlapRatio, score };
+  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline, samplePath, ascent, overlapRatio, score, trimSpurs };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -68,3 +68,5 @@ label.check input { width: auto; }
 #histList li { display: grid; grid-template-columns: 1.3fr 1fr 1fr .3fr; gap: 6px; padding: 6px 0; border-top: 1px solid #e3ebe6; }
 .foot { font-size: .8rem; color: #5d6d63; text-align: center; margin: 18px 0 4px; }
 .foot a { color: inherit; }
+.arrow div { font-size: 14px; line-height: 18px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.km div { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; color: #1d2b22; box-sizing: border-box; }
