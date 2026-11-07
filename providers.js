@@ -119,9 +119,10 @@
     // Nominatim first: it reads Hebrew addresses well. Our server (OpenRouteService) is the backup.
     async geocode(text) {
       try {
-        const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=he&countrycodes=il&q=' + encodeURIComponent(text);
+        const he = !window.I18N || I18N.lang === 'he';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=${he ? 'he' : 'en'}${he ? '&countrycodes=il' : ''}&q=` + encodeURIComponent(text);
         let res = await (await fetch(url)).json();
-        if (!res.length) res = await (await fetch(url.replace('&countrycodes=il', ''))).json(); // outside Israel
+        if (!res.length && he) res = await (await fetch(url.replace('&countrycodes=il', ''))).json(); // outside Israel
         if (res.length) return { lat: +res[0].lat, lng: +res[0].lon };
       } catch (e) { console.warn('nominatim failed', e); }
       if (cfg.PROXY_URL) {
@@ -174,7 +175,7 @@
 
     async reverse(p) {
       try {
-        const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=he&lat=${p.lat}&lon=${p.lng}`)).json();
+        const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=${!window.I18N || I18N.lang === 'he' ? 'he' : 'en'}&lat=${p.lat}&lon=${p.lng}`)).json();
         if (r.display_name) return r.display_name.split(',').slice(0, 3).join(',');
       } catch {}
       if (cfg.PROXY_URL) {

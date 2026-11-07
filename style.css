@@ -70,3 +70,6 @@ label.check input { width: auto; }
 .foot a { color: inherit; }
 .arrow div { font-size: 14px; line-height: 18px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 .km div { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; color: #1d2b22; box-sizing: border-box; }
+.toprow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.toprow h1 { margin: 0; }
+button.lang-btn { width: auto; margin: 0; padding: 6px 10px; font-size: .85rem; background: #e8efe9; color: #1d2b22; font-weight: 600; }

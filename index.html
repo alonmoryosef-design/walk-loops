@@ -17,93 +17,96 @@
 </head>
 <body>
   <aside id="panel">
-    <h1>🚶 מסלולי הליכה מעגליים</h1>
+    <div class="toprow"><h1>🚶 <span data-i18n="title">מסלולי הליכה מעגליים</span></h1><button type="button" id="langBtn" class="lang-btn" data-i18n="language">English</button></div>
 
     <form id="form" class="card">
-      <label for="start">נקודת מוצא</label>
+      <label for="start" data-i18n="start">נקודת מוצא</label>
       <div class="row">
-        <input id="start" type="text" placeholder="כתובת, למשל: דיזנגוף 100, תל אביב" required>
-        <button type="button" id="locate" title="המיקום שלי">📍</button>
+        <input id="start" type="text" data-i18n-ph="startPh" placeholder="כתובת, למשל: דיזנגוף 100, תל אביב" required>
+        <button type="button" id="locate" data-i18n-title="myLocation" title="המיקום שלי">📍</button>
       </div>
-      <p class="hint">אפשר גם ללחוץ על המפה כדי לבחור נקודה.</p>
+      <p class="hint" data-i18n="mapHint">אפשר גם ללחוץ על המפה כדי לבחור נקודה.</p>
 
-      <label for="amount">כמה ללכת</label>
+      <label for="amount" data-i18n="howFar">כמה ללכת</label>
       <div class="row">
         <input id="amount" type="number" min="0.5" max="50" step="0.5" value="5" required>
         <select id="unit" aria-label="יחידה">
-          <option value="km" selected>ק״מ</option>
-          <option value="min">דקות</option>
+          <option value="km" selected data-i18n="unitKm">ק״מ</option>
+          <option value="mi" data-i18n="unitMi">מייל</option>
+          <option value="min" data-i18n="unitMin">דקות</option>
         </select>
       </div>
 
-      <label for="terrain">עליות</label>
+      <label for="terrain" data-i18n="hills">עליות</label>
       <select id="terrain">
-        <option value="any" selected>לא משנה</option>
-        <option value="flat">כמה שפחות עליות</option>
-        <option value="hilly">עם עליות</option>
+        <option value="any" selected data-i18n="hillsAny">לא משנה</option>
+        <option value="flat" data-i18n="hillsFlat">כמה שפחות עליות</option>
+        <option value="hilly" data-i18n="hillsHilly">עם עליות</option>
       </select>
 
-      <label for="direction">כיוון</label>
+      <label for="direction" data-i18n="direction">כיוון</label>
       <select id="direction">
-        <option value="any" selected>כל הכיוונים</option>
-        <option value="0">צפון</option>
-        <option value="45">צפון-מזרח</option>
-        <option value="90">מזרח</option>
-        <option value="135">דרום-מזרח</option>
-        <option value="180">דרום</option>
-        <option value="225">דרום-מערב</option>
-        <option value="270">מערב (בישראל: לכיוון הים)</option>
-        <option value="315">צפון-מערב</option>
+        <option value="any" selected data-i18n="dirAny">כל הכיוונים</option>
+        <option value="0" data-dir="0">צפון</option>
+        <option value="45" data-dir="1">צפון-מזרח</option>
+        <option value="90" data-dir="2">מזרח</option>
+        <option value="135" data-dir="3">דרום-מזרח</option>
+        <option value="180" data-dir="4">דרום</option>
+        <option value="225" data-dir="5">דרום-מערב</option>
+        <option value="270" data-dir="6">מערב</option>
+        <option value="315" data-dir="7">צפון-מערב</option>
       </select>
 
       <label class="check" id="greenRow" hidden>
-        <input type="checkbox" id="green"> להעדיף פארקים ורחובות שקטים
+        <input type="checkbox" id="green"> <span data-i18n="green">להעדיף פארקים ורחובות שקטים</span>
       </label>
 
-      <label for="count">כמה מסלולים להציע</label>
+      <label for="count" data-i18n="count">כמה מסלולים להציע</label>
       <select id="count">
         <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
       </select>
 
-      <button type="submit" id="go">צור מסלולים</button>
+      <button type="submit" id="go" data-i18n="go">צור מסלולים</button>
       <p id="status" class="status"></p>
     </form>
 
     <ul id="results"></ul>
 
     <details id="settings" class="card">
-      <summary>⚙️ הגדרות</summary>
-      <label for="orsKey">מפתח OpenRouteService</label>
-      <input id="orsKey" type="password" dir="ltr" autocomplete="off" placeholder="מדביקים כאן את המפתח">
-      <p class="hint">מפעיל את האפשרות "פארקים ורחובות שקטים" ומשמש גיבוי כשהשרת הציבורי עמוס. נשמר רק במכשיר הזה.</p>
-      <button type="button" id="saveOrs">שמירה</button>
+      <summary data-i18n="settings">⚙️ הגדרות</summary>
+      <label for="orsKey" data-i18n="orsKey">מפתח OpenRouteService</label>
+      <input id="orsKey" type="password" dir="ltr" autocomplete="off" data-i18n-ph="orsPh" placeholder="מדביקים כאן את המפתח">
+      <p class="hint" data-i18n="orsHint">מפעיל את האפשרות "פארקים ורחובות שקטים" ומשמש גיבוי כשהשרת הציבורי עמוס. נשמר רק במכשיר הזה.</p>
+      <button type="button" id="saveOrs" data-i18n="save">שמירה</button>
       <p id="orsSaved" class="status"></p>
     </details>
 
     <details id="histBox" class="card" hidden>
-      <summary>📊 ההליכות שלי</summary>
+      <summary data-i18n="history">📊 ההליכות שלי</summary>
       <p id="histSummary" class="hist-summary"></p>
       <ul id="histList"></ul>
     </details>
 
     <details id="favBox" class="card" hidden>
-      <summary>★ המסלולים השמורים שלי (<span id="favCount">0</span>)</summary>
+      <summary><span data-i18n="favs">★ המסלולים השמורים שלי</span> (<span id="favCount">0</span>)</summary>
       <ul id="favList"></ul>
     </details>
-    <p class="foot"><a href="privacy.html">מדיניות פרטיות</a> · מפות © OpenStreetMap</p>
+    <p class="foot"><a href="privacy.html" data-i18n="privacy">מדיניות פרטיות</a> · <span data-i18n="mapsBy">מפות © OpenStreetMap</span></p>
   </aside>
   <main id="map"></main>
 
   <div id="trackBar" hidden>
     <div id="trackText"></div>
     <div class="track-actions">
-      <button type="button" id="trackVoice" title="הנחיות קוליות">🔊</button>
-      <button type="button" id="trackCenter">📍 אליי</button>
-      <button type="button" id="trackStop" class="stop">סיום</button>
+      <button type="button" id="trackVoice" data-i18n-title="voiceTitle" title="הנחיות קוליות">🔊</button>
+      <button type="button" id="trackCenter" data-i18n="toMe">📍 אליי</button>
+      <button type="button" id="trackStop" class="stop" data-i18n="stop">סיום</button>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="i18n.js"></script>
+  <script>I18N.apply();</script>
   <script src="config.js"></script>
   <script src="routing.js"></script>
   <script src="providers.js"></script>
