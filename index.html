@@ -2,8 +2,16 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>מסלולי הליכה מעגליים</title>
+  <meta name="theme-color" content="#1f8a4c">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="מסלולי הליכה">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -19,8 +27,14 @@
       </div>
       <p class="hint">אפשר גם ללחוץ על המפה כדי לבחור נקודה.</p>
 
-      <label for="km">מרחק רצוי (ק״מ)</label>
-      <input id="km" type="number" min="0.5" max="50" step="0.5" value="5" required>
+      <label for="amount">כמה ללכת</label>
+      <div class="row">
+        <input id="amount" type="number" min="0.5" max="50" step="0.5" value="5" required>
+        <select id="unit" aria-label="יחידה">
+          <option value="km" selected>ק״מ</option>
+          <option value="min">דקות</option>
+        </select>
+      </div>
 
       <label for="terrain">עליות</label>
       <select id="terrain">
@@ -28,6 +42,10 @@
         <option value="flat">כמה שפחות עליות</option>
         <option value="hilly">עם עליות</option>
       </select>
+
+      <label class="check" id="greenRow" hidden>
+        <input type="checkbox" id="green"> להעדיף פארקים ורחובות שקטים
+      </label>
 
       <label for="count">כמה מסלולים להציע</label>
       <select id="count">
@@ -39,8 +57,21 @@
     </form>
 
     <ul id="results"></ul>
+
+    <details id="favBox" class="card" hidden>
+      <summary>★ המסלולים השמורים שלי (<span id="favCount">0</span>)</summary>
+      <ul id="favList"></ul>
+    </details>
   </aside>
   <main id="map"></main>
+
+  <div id="trackBar" hidden>
+    <div id="trackText"></div>
+    <div class="track-actions">
+      <button type="button" id="trackCenter">📍 אליי</button>
+      <button type="button" id="trackStop" class="stop">סיום</button>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="config.js"></script>

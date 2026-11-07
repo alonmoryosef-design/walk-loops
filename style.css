@@ -32,3 +32,27 @@ button.link { background: none; color: #557; text-decoration: underline; font-we
 .leaflet-container { font-family: inherit; }
 .start-pin { background: #1d2b22; color: #fff; border-radius: 50%; border: 2px solid #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 #results .profile { display: block; width: 100%; height: 44px; margin-top: 6px; }
+.row select { width: auto; flex: none; }
+label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-top: 12px; }
+label.check input { width: auto; }
+#results .warn { font-size: .85rem; color: #9a5b00; margin-top: 4px; }
+#results .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+#results .actions button { width: auto; margin: 0; padding: 7px 10px; font-size: .85rem; background: #e8efe9; color: #1d2b22; }
+#results .actions button.primary { background: var(--c); color: #fff; }
+#results .actions a { margin: 0 4px; }
+#favBox summary { cursor: pointer; font-weight: 700; }
+#favList { list-style: none; padding: 0; margin: 10px 0 0; }
+#favList li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e3ebe6; cursor: pointer; }
+#favList .fav-name { flex: 1; font-weight: 600; }
+#favList .fav-meta { font-size: .85rem; color: #5d6d63; }
+#favList button.link { width: auto; margin: 0; padding: 0 6px; text-decoration: none; }
+#trackBar { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; z-index: 1000; background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 18px rgba(0,0,0,.18); display: flex; align-items: center; gap: 10px; }
+#trackBar[hidden] { display: none; }
+#trackText { flex: 1; font-weight: 600; font-size: .95rem; }
+.track-actions { display: flex; gap: 6px; }
+.track-actions button { width: auto; margin: 0; padding: 8px 12px; font-size: .9rem; background: #e8efe9; color: #1d2b22; }
+.track-actions button.stop { background: #b3261e; color: #fff; }
+@media (max-width: 760px) {
+  body.walking #panel { height: 0; padding: 0; overflow: hidden; }
+  body.walking #map { height: 100%; flex: 1; }
+}

@@ -31,22 +31,58 @@
   const DETOUR = 1.25;
 
   /**
+   * Share of the route (0..1) that walks a street it already walked
+   * ("there and back" spurs, or the same street out and home).
+   */
+  function overlapRatio(path) {
+    let total = 0;
+    for (let i = 1; i < path.length; i++) total += haversine(path[i - 1], path[i]);
+    const STEP = 20, NEAR = 12, APART = 200; // meters
+    const n = Math.min(800, Math.max(20, Math.round(total / STEP)));
+    const step = total / (n - 1);
+    const pts = samplePath(path, n);
+    const kx = Math.cos(toRad(pts[0].lat)) * 111320, ky = 110540;
+    const xy = pts.map(p => [p.lng * kx, p.lat * ky]);
+    const gap = Math.ceil(APART / step);
+    let repeated = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (Math.abs(i - j) < gap) continue;
+        const dx = xy[i][0] - xy[j][0], dy = xy[i][1] - xy[j][1];
+        if (dx * dx + dy * dy < NEAR * NEAR) { repeated++; break; }
+      }
+    }
+    return repeated / n;
+  }
+
+  // Lower is better: distance error, plus a penalty for walking the same street twice.
+  const score = r => r.err + 0.6 * r.overlap;
+
+  /**
    * Find one loop of ~targetM meters heading in `bearing`.
    * fetchRoute(start, waypoints) -> Promise<{distanceM, durationS, path:[{lat,lng}]}>
    */
   async function findLoop(start, targetM, bearing, fetchRoute, opts = {}) {
     const n = opts.waypoints || 3;
-    const maxIter = opts.maxIter || 4;
+    const maxIter = opts.maxIter || 5;
     const tol = opts.tolerance || 0.05;
     let radius = targetM / (2 * Math.PI * DETOUR);
+    let dir = bearing, nudge = 0;
     let best = null;
     for (let i = 0; i < maxIter; i++) {
-      const wps = circleWaypoints(start, radius, bearing, n);
+      const wps = circleWaypoints(start, radius, dir, n);
       let route;
       try { route = await fetchRoute(start, wps); } catch (e) { if (i === 0) throw e; break; }
-      const err = Math.abs(route.distanceM - targetM) / targetM;
-      if (!best || err < best.err) best = { ...route, waypoints: wps, bearing, err };
-      if (err <= tol) break;
+      const cand = { ...route, waypoints: wps, bearing: dir,
+        err: Math.abs(route.distanceM - targetM) / targetM, overlap: overlapRatio(route.path) };
+      if (!best || score(cand) < score(best)) best = cand;
+      if (cand.err <= tol && cand.overlap <= 0.08) break;
+      if (cand.err <= tol) {
+        // Right length but retraces streets: turn the loop a little and try again.
+        nudge++;
+        dir = (bearing + (nudge % 2 ? 1 : -1) * 18 * Math.ceil(nudge / 2) + 360) % 360;
+        continue;
+      }
       // Scale radius toward target; damp to avoid oscillation.
       const ratio = targetM / route.distanceM;
       radius *= Math.min(1.8, Math.max(0.5, Math.pow(ratio, 0.9)));
@@ -67,7 +103,7 @@
     const res = await Promise.all(jobs);
     const ok = res.filter(r => r && !r.error);
     if (!ok.length) throw (res.find(r => r && r.error) || {}).error || new Error('no routes');
-    return ok.sort((a, b) => a.err - b.err);
+    return ok.sort((a, b) => score(a) - score(b));
   }
 
   // Google encoded polyline decoder.
@@ -121,5 +157,5 @@
     return up;
   }
 
-  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline, samplePath, ascent };
+  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline, samplePath, ascent, overlapRatio, score };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -39,6 +39,7 @@
       body: JSON.stringify({
         coordinates: [start, ...wps, start].map(p => [p.lng, p.lat]),
         radiuses: [-1, ...wps.map(() => -1), -1], // snap waypoints to the nearest path, however far
+        ...(window.Providers.prefs.green ? { options: { profile_params: { weightings: { green: 1, quiet: 1 } } } } : {}),
       }),
     });
     if (r.status === 429) throw new Error('rate-limit');
@@ -54,6 +55,7 @@
 
   const impl = cfg.ROUTER === 'ors' ? ors : osrm; // 'osm-public' and 'osrm' both speak OSRM
   window.Providers = {
+    prefs: { green: false }, // green/quiet streets (OpenRouteService only)
     fetchRoute: (start, wps) => limit(() => impl(start, wps)),
 
     async geocode(text) {
