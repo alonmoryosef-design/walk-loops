@@ -66,6 +66,22 @@
       return { lat: +res[0].lat, lng: +res[0].lon };
     },
 
+    // Elevation (m) for up to 100 points per call. Open-Meteo: free, no key
+    // (free tier is for non-commercial use, ~10,000 calls/day).
+    async elevation(points) {
+      const out = [];
+      for (let i = 0; i < points.length; i += 100) {
+        const chunk = points.slice(i, i + 100);
+        const url = 'https://api.open-meteo.com/v1/elevation?latitude=' +
+          chunk.map(p => p.lat.toFixed(5)).join(',') + '&longitude=' + chunk.map(p => p.lng.toFixed(5)).join(',');
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('elevation-failed');
+        const data = await r.json();
+        out.push(...data.elevation);
+      }
+      return out;
+    },
+
     async reverse(p) {
       try {
         const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=he&lat=${p.lat}&lon=${p.lng}`)).json();

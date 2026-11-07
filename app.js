@@ -87,12 +87,38 @@
       li.style.setProperty('--c', color);
       li.innerHTML = `
         <div class="title"><span class="dot"></span>מסלול ${i + 1} · לכיוון ${dirName(r.bearing)}</div>
-        <div class="meta">${(r.distanceM / 1000).toFixed(2)} ק״מ · כ-${fmtDuration(r.durationS)}</div>
+        <div class="meta">${(r.distanceM / 1000).toFixed(2)} ק״מ · כ-${fmtDuration(r.durationS)}${r.ascentM != null ? ` · ↗ ${Math.round(r.ascentM)} מ׳ עלייה` : ''}</div>
+        ${r.elev ? profileSvg(r.elev, color) : ''}
         <a href="${mapsLink(startPoint, r.waypoints)}" target="_blank" rel="noopener">פתח ניווט ב-Google Maps ↗</a>`;
       li.addEventListener('click', e => { if (e.target.tagName !== 'A') select(i); });
       $('results').appendChild(li);
     });
     map.fitBounds(L.featureGroup(group).getBounds(), { padding: [30, 30] });
+  }
+
+  async function addElevation(routes) {
+    try {
+      await Promise.all(routes.map(async r => {
+        const pts = LoopRouting.samplePath(r.path, 80);
+        r.elev = await Providers.elevation(pts);
+        r.ascentM = LoopRouting.ascent(r.elev);
+      }));
+      return true;
+    } catch (e) {
+      console.warn('elevation failed', e);
+      return false;
+    }
+  }
+
+  // Tiny elevation profile as inline SVG.
+  function profileSvg(elev, color) {
+    const w = 300, h = 44, min = Math.min(...elev), max = Math.max(...elev);
+    const span = Math.max(max - min, 10); // at least 10 m so flat routes look flat
+    const pts = elev.map((e, i) => `${(i / (elev.length - 1) * w).toFixed(1)},${(h - 4 - (e - min) / span * (h - 8)).toFixed(1)}`);
+    return `<svg class="profile" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <polygon points="0,${h} ${pts.join(' ')} ${w},${h}" fill="${color}" fill-opacity=".15"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    </svg>`;
   }
 
   $('form').addEventListener('submit', async e => {
@@ -110,11 +136,26 @@
         $('start').dataset.resolved = text;
       }
       const count = parseInt($('count').value, 10);
-      setStatus(`מחשב מסלולים… 0/${count}`);
-      const routes = await LoopRouting.findLoops(startPoint, km * 1000, count, Providers.fetchRoute,
+      const terrain = $('terrain').value;
+      // When the user cares about hills, try extra directions and keep the best ones.
+      const tries = terrain === 'any' ? count : Math.min(count + 3, 9);
+      setStatus(`מחשב מסלולים… 0/${tries}`);
+      let routes = await LoopRouting.findLoops(startPoint, km * 1000, tries, Providers.fetchRoute,
         (d, n) => setStatus(`מחשב מסלולים… ${d}/${n}`));
+      setStatus('בודק עליות…');
+      const elevOk = await addElevation(routes);
+      if (terrain !== 'any' && elevOk) {
+        const close = routes.filter(r => r.err <= 0.12);
+        const pool = close.length >= count ? close : routes;
+        pool.sort((a, b) => terrain === 'flat' ? a.ascentM - b.ascentM : b.ascentM - a.ascentM);
+        routes = pool.slice(0, count);
+      } else {
+        routes = routes.slice(0, count);
+      }
       showRoutes(routes);
-      setStatus(`נמצאו ${routes.length} מסלולים. לחץ על מסלול כדי להדגיש אותו.`);
+      const order = terrain === 'flat' ? ' (מהשטוח ביותר)' : terrain === 'hilly' ? ' (מהתלול ביותר)' : '';
+      setStatus(`נמצאו ${routes.length} מסלולים${elevOk ? order : ''}. לחץ על מסלול כדי להדגיש אותו.` +
+        (elevOk ? '' : ' (נתוני גובה לא זמינים כרגע)'));
     } catch (err) {
       console.error(err);
       const msg = String(err && err.message || err);

@@ -86,5 +86,40 @@
     return out;
   }
 
-  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline };
+  function haversine(a, b) {
+    const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R_EARTH * Math.asin(Math.sqrt(h));
+  }
+
+  // n points evenly spaced (by distance) along a path.
+  function samplePath(path, n) {
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + haversine(path[i - 1], path[i]));
+    const total = cum[cum.length - 1];
+    const out = [];
+    let j = 1;
+    for (let k = 0; k < n; k++) {
+      const d = total * k / (n - 1);
+      while (j < path.length - 1 && cum[j] < d) j++;
+      const seg = cum[j] - cum[j - 1] || 1;
+      const t = Math.min(1, Math.max(0, (d - cum[j - 1]) / seg));
+      const a = path[j - 1], b = path[j] || a;
+      out.push({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
+    }
+    return out;
+  }
+
+  // Total climb in meters, after light smoothing so DEM noise isn't counted as hills.
+  function ascent(elev) {
+    const s = elev.map((_, i) => {
+      const w = elev.slice(Math.max(0, i - 1), i + 2);
+      return w.reduce((x, y) => x + y, 0) / w.length;
+    });
+    let up = 0;
+    for (let i = 1; i < s.length; i++) if (s[i] > s[i - 1]) up += s[i] - s[i - 1];
+    return up;
+  }
+
+  global.LoopRouting = { offset, circleWaypoints, findLoop, findLoops, decodePolyline, samplePath, ascent };
 })(typeof window !== 'undefined' ? window : globalThis);

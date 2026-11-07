@@ -31,3 +31,4 @@ button.link { background: none; color: #557; text-decoration: underline; font-we
 }
 .leaflet-container { font-family: inherit; }
 .start-pin { background: #1d2b22; color: #fff; border-radius: 50%; border: 2px solid #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+#results .profile { display: block; width: 100%; height: 44px; margin-top: 6px; }
