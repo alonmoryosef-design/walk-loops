@@ -116,7 +116,14 @@
       }
     }),
 
+    // Nominatim first: it reads Hebrew addresses well. Our server (OpenRouteService) is the backup.
     async geocode(text) {
+      try {
+        const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=he&countrycodes=il&q=' + encodeURIComponent(text);
+        let res = await (await fetch(url)).json();
+        if (!res.length) res = await (await fetch(url.replace('&countrycodes=il', ''))).json(); // outside Israel
+        if (res.length) return { lat: +res[0].lat, lng: +res[0].lon };
+      } catch (e) { console.warn('nominatim failed', e); }
       if (cfg.PROXY_URL) {
         try {
           const r = await fetch(cfg.PROXY_URL.replace(/\/$/, '') + '/geocode?q=' + encodeURIComponent(text));
@@ -124,13 +131,7 @@
           if (res.length) return { lat: res[0].lat, lng: res[0].lng };
         } catch (e) { console.warn('proxy geocode failed', e); }
       }
-      const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=he&countrycodes=il&q=' + encodeURIComponent(text);
-      let res = await (await fetch(url)).json();
-      if (!res.length) { // retry without the Israel restriction
-        res = await (await fetch(url.replace('&countrycodes=il', ''))).json();
-      }
-      if (!res.length) throw new Error('geocode-notfound');
-      return { lat: +res[0].lat, lng: +res[0].lon };
+      throw new Error('geocode-notfound');
     },
 
     // Elevation (m) for up to 100 points per call. Open-Meteo: free, no key
@@ -172,16 +173,17 @@
     },
 
     async reverse(p) {
+      try {
+        const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=he&lat=${p.lat}&lon=${p.lng}`)).json();
+        if (r.display_name) return r.display_name.split(',').slice(0, 3).join(',');
+      } catch {}
       if (cfg.PROXY_URL) {
         try {
           const r = await (await fetch(`${cfg.PROXY_URL.replace(/\/$/, '')}/reverse?lat=${p.lat}&lng=${p.lng}`)).json();
           if (r.label) return r.label;
         } catch {}
       }
-      try {
-        const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=he&lat=${p.lat}&lon=${p.lng}`)).json();
-        return r.display_name ? r.display_name.split(',').slice(0, 3).join(',') : null;
-      } catch { return null; }
+      return null;
     },
   };
 })();

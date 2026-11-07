@@ -8,7 +8,7 @@
 window.WALK_CONFIG = {
   // Address of our Cloudflare Worker (see worker/README.md). When set, routes and address
   // search go through it (OpenRouteService, key hidden), with the public server as backup.
-  PROXY_URL: '',
+  PROXY_URL: 'https://walk-loops-api.alonmoryosef.workers.dev',
 
   ROUTER: 'osm-public',
   ORS_KEY: '',
