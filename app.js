@@ -17,8 +17,9 @@
   // OpenRouteService key: entered in the app and kept only on this device (never in the code).
   const ORS_STORE = 'walkLoops.orsKey';
   try { cfg.ORS_KEY = cfg.ORS_KEY || localStorage.getItem(ORS_STORE) || ''; } catch {}
-  const refreshGreen = () => { $('greenRow').hidden = !(cfg.ROUTER === 'ors' || cfg.ORS_KEY); };
+  const refreshGreen = () => { $('greenRow').hidden = !(cfg.ROUTER === 'ors' || cfg.ORS_KEY || cfg.PROXY_URL); };
   refreshGreen();
+  if (cfg.PROXY_URL) $('settings').hidden = true; // the key lives on the server
   $('orsKey').value = cfg.ORS_KEY;
   $('saveOrs').addEventListener('click', () => {
     cfg.ORS_KEY = $('orsKey').value.trim();

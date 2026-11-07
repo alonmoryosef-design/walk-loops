@@ -59,6 +59,28 @@
     return out;
   }
 
+  // Through our Cloudflare Worker (key hidden there). Same answer shape as ORS.
+  async function proxy(start, wps) {
+    const r = await fetch(cfg.PROXY_URL.replace(/\/$/, '') + '/route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates: [start, ...wps, start].map(p => [p.lng, p.lat]), green: !!window.Providers.prefs.green }),
+    });
+    if (r.status === 429) throw new Error('rate-limit');
+    const data = await r.json();
+    if (!r.ok) throw new Error((data.error && (data.error.message || data.error)) || r.statusText);
+    return orsResult(data.features[0]);
+  }
+
+  function orsResult(f) {
+    return {
+      distanceM: f.properties.summary.distance,
+      durationS: f.properties.summary.distance / WALK_SPEED,
+      path: f.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+      steps: orsSteps(f),
+    };
+  }
+
   async function ors(start, wps) {
     if (!cfg.ORS_KEY) throw new Error('ors-key-missing');
     const r = await fetch('https://api.openrouteservice.org/v2/directions/foot-walking/geojson', {
@@ -73,13 +95,7 @@
     if (r.status === 429) throw new Error('rate-limit');
     const data = await r.json();
     if (!r.ok) throw new Error((data.error && (data.error.message || data.error)) || r.statusText);
-    const f = data.features[0];
-    return {
-      distanceM: f.properties.summary.distance,
-      durationS: f.properties.summary.duration,
-      path: f.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
-      steps: orsSteps(f),
-    };
+    return orsResult(data.features[0]);
   }
 
   const impl = cfg.ROUTER === 'ors' ? ors : osrm; // 'osm-public' and 'osrm' both speak OSRM
@@ -88,6 +104,10 @@
     // Green/quiet uses OpenRouteService; everything else uses the default router,
     // falling back to OpenRouteService (when a key exists) if the default is busy or down.
     fetchRoute: (start, wps) => limit(async () => {
+      if (cfg.PROXY_URL) {
+        try { return await proxy(start, wps); }
+        catch (e) { console.warn('proxy failed, using public server', e); return osrm(start, wps); }
+      }
       if (window.Providers.prefs.green && cfg.ORS_KEY) return ors(start, wps);
       try { return await impl(start, wps); }
       catch (e) {
@@ -97,6 +117,13 @@
     }),
 
     async geocode(text) {
+      if (cfg.PROXY_URL) {
+        try {
+          const r = await fetch(cfg.PROXY_URL.replace(/\/$/, '') + '/geocode?q=' + encodeURIComponent(text));
+          const res = r.ok ? await r.json() : [];
+          if (res.length) return { lat: res[0].lat, lng: res[0].lng };
+        } catch (e) { console.warn('proxy geocode failed', e); }
+      }
       const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=he&countrycodes=il&q=' + encodeURIComponent(text);
       let res = await (await fetch(url)).json();
       if (!res.length) { // retry without the Israel restriction
@@ -145,6 +172,12 @@
     },
 
     async reverse(p) {
+      if (cfg.PROXY_URL) {
+        try {
+          const r = await (await fetch(`${cfg.PROXY_URL.replace(/\/$/, '')}/reverse?lat=${p.lat}&lng=${p.lng}`)).json();
+          if (r.label) return r.label;
+        } catch {}
+      }
       try {
         const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=he&lat=${p.lat}&lon=${p.lng}`)).json();
         return r.display_name ? r.display_name.split(',').slice(0, 3).join(',') : null;

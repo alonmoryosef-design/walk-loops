@@ -6,6 +6,10 @@
 //                 Free key without a credit card, ~2,000 routes/day. Put the key in ORS_KEY.
 //  'osrm'       – Your own OSRM server with the foot profile. Put its URL in OSRM_URL.
 window.WALK_CONFIG = {
+  // Address of our Cloudflare Worker (see worker/README.md). When set, routes and address
+  // search go through it (OpenRouteService, key hidden), with the public server as backup.
+  PROXY_URL: '',
+
   ROUTER: 'osm-public',
   ORS_KEY: '',
   OSRM_URL: 'https://routing.openstreetmap.de/routed-foot',
