@@ -7,13 +7,25 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   let startPoint = null, startMarker = null, lines = [], shown = [];
+  const HIST_KEY = 'walkLoops.history';
 
   const map = L.map('map', { zoomControl: false }).setView([32.0853, 34.7818], 13);
   L.control.zoom({ position: 'bottomleft' }).addTo(map);
   L.tileLayer(cfg.TILE_URL, { maxZoom: 19, attribution: cfg.TILE_ATTRIBUTION }).addTo(map);
+  const poiLayer = L.layerGroup().addTo(map);
 
-  // Green/quiet preference needs OpenRouteService.
-  if (cfg.ROUTER === 'ors') $('greenRow').hidden = false;
+  // OpenRouteService key: entered in the app and kept only on this device (never in the code).
+  const ORS_STORE = 'walkLoops.orsKey';
+  try { cfg.ORS_KEY = cfg.ORS_KEY || localStorage.getItem(ORS_STORE) || ''; } catch {}
+  const refreshGreen = () => { $('greenRow').hidden = !(cfg.ROUTER === 'ors' || cfg.ORS_KEY); };
+  refreshGreen();
+  $('orsKey').value = cfg.ORS_KEY;
+  $('saveOrs').addEventListener('click', () => {
+    cfg.ORS_KEY = $('orsKey').value.trim();
+    try { cfg.ORS_KEY ? localStorage.setItem(ORS_STORE, cfg.ORS_KEY) : localStorage.removeItem(ORS_STORE); } catch {}
+    refreshGreen();
+    $('orsSaved').textContent = cfg.ORS_KEY ? 'נשמר. האפשרות "פארקים ורחובות שקטים" זמינה עכשיו.' : 'המפתח הוסר.';
+  });
 
   function setStatus(msg, isError) {
     const el = $('status');
@@ -50,6 +62,7 @@
   }
 
   function clearRoutes() {
+    poiLayer.clearLayers();
     lines.forEach(l => l.remove());
     lines = [];
     shown = [];
@@ -112,10 +125,12 @@
         <div class="meta">${(r.distanceM / 1000).toFixed(2)} ק״מ · כ-${fmtDuration(r.durationS)}${r.ascentM != null ? ` · ↗ ${Math.round(r.ascentM)} מ׳ עלייה` : ''}</div>
         ${retrace}
         ${r.elev ? profileSvg(r.elev, color) : ''}
+        <div class="pois-line"></div>
         <div class="actions">
           <button type="button" data-act="walk" class="primary">▶ התחל הליכה</button>
           <button type="button" data-act="share">שיתוף</button>
           <button type="button" data-act="gpx">GPX</button>
+          <button type="button" data-act="pois">🚰 מה יש בדרך</button>
           <button type="button" data-act="fav">${isFavorite(r) ? '★ שמור' : '☆ שמירה'}</button>
           <a href="${mapsLink(r.start || startPoint, r.waypoints)}" target="_blank" rel="noopener">Google Maps ↗</a>
         </div>`;
@@ -124,6 +139,7 @@
         if (act === 'walk') Tracker.start(r, color);
         else if (act === 'share') shareRoute(r);
         else if (act === 'gpx') gpxRoute(r, i);
+        else if (act === 'pois') showPois(r, li);
         else if (act === 'fav') { toggleFavorite(r, routeTitle(r, i)); e.target.textContent = isFavorite(r) ? '★ שמור' : '☆ שמירה'; }
         if (e.target.tagName !== 'A') select(i);
       });
@@ -165,6 +181,26 @@
     Object.assign(r, { start, waypoints: wps, bearing: bearingTo(start, c), err: 0, overlap: LoopRouting.overlapRatio(r.path), title });
     await addElevation([r]);
     return r;
+  }
+
+  // ---------- Water, toilets, benches along the route ----------
+  const POI_ICON = { water: '🚰', toilet: '🚻', bench: '🪑' };
+  async function showPois(r, li) {
+    const out = li.querySelector('.pois-line');
+    out.textContent = 'מחפש ברזיות, שירותים וספסלים…';
+    try {
+      r.pois = r.pois || await Providers.pois(r.path);
+      poiLayer.clearLayers();
+      r.pois.forEach(p => L.marker(p, {
+        icon: L.divIcon({ className: 'poi', html: POI_ICON[p.kind], iconSize: [22, 22], iconAnchor: [11, 11] }),
+      }).addTo(poiLayer));
+      const n = k => r.pois.filter(p => p.kind === k).length;
+      out.textContent = r.pois.length
+        ? `🚰 ${n('water')} ברזיות · 🚻 ${n('toilet')} שירותים · 🪑 ${n('bench')} ספסלים (מסומנים על המפה)`
+        : 'לא נמצאו ברזיות, שירותים או ספסלים במפה לאורך המסלול.';
+    } catch {
+      out.textContent = 'השירות לא זמין כרגע. נסה שוב בעוד דקה.';
+    }
   }
 
   // ---------- Share link ----------
@@ -263,6 +299,58 @@
     } catch (err) { setStatus('לא הצלחתי לטעון את המסלול: ' + err.message, true); }
   });
 
+  // ---------- Voice + vibration ----------
+  const TURN_TEXT = {
+    'left': 'פנה שמאלה', 'right': 'פנה ימינה', 'slight left': 'המשך מעט שמאלה', 'slight right': 'המשך מעט ימינה',
+    'sharp left': 'פנה חדות שמאלה', 'sharp right': 'פנה חדות ימינה', 'uturn': 'הסתובב לאחור', 'roundabout': 'בכיכר, המשך לפי המסלול',
+  };
+  const TURN_ARROW = { 'left': '⬅', 'right': '➡', 'slight left': '↖', 'slight right': '↗', 'sharp left': '↙', 'sharp right': '↘', 'uturn': '↩', 'roundabout': '⟳' };
+  const turnText = t => (TURN_TEXT[t.turn] || 'המשך') + (t.name && t.turn !== 'roundabout' ? ` אל ${t.name}` : '');
+
+  const Voice = {
+    on: (() => { try { return localStorage.getItem('walkLoops.voice') !== 'off'; } catch { return true; } })(),
+    say(text) {
+      if (!this.on || !window.speechSynthesis) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'he-IL';
+      const v = speechSynthesis.getVoices().find(v => /^he|^iw/i.test(v.lang));
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    },
+    buzz(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); },
+    toggle() {
+      this.on = !this.on;
+      try { localStorage.setItem('walkLoops.voice', this.on ? 'on' : 'off'); } catch {}
+      if (!this.on && window.speechSynthesis) speechSynthesis.cancel();
+      $('trackVoice').textContent = this.on ? '🔊' : '🔇';
+    },
+  };
+  $('trackVoice').textContent = Voice.on ? '🔊' : '🔇';
+  $('trackVoice').addEventListener('click', () => Voice.toggle());
+
+  // ---------- Walk history (kept on this device) ----------
+  function loadHist() { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; } }
+  function addHistory(h) {
+    const list = loadHist();
+    list.unshift(h);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 500))); } catch {}
+    renderHist();
+  }
+  function renderHist() {
+    const list = loadHist();
+    $('histBox').hidden = !list.length;
+    if (!list.length) return;
+    const weekStart = new Date(); weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
+    const week = list.filter(h => h.date >= weekStart.getTime());
+    const km = a => (a.reduce((s, h) => s + h.walkedM, 0) / 1000).toFixed(1);
+    $('histSummary').textContent = `השבוע: ${km(week)} ק״מ ב-${week.length} הליכות · סה״כ: ${km(list)} ק״מ`;
+    const fmtDate = t => new Date(t).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' });
+    $('histList').innerHTML = list.slice(0, 15).map(h => `
+      <li><span>${fmtDate(h.date)}</span><span>${(h.walkedM / 1000).toFixed(2)} ק״מ</span>
+      <span>${fmtDuration(h.seconds)}</span><span>${h.finished ? '✓' : ''}</span></li>`).join('');
+  }
+
   // ---------- Live walk tracking ----------
   const Tracker = {
     active: false,
@@ -285,6 +373,22 @@
       $('trackText').textContent = 'מחפש את המיקום שלך…';
       map.fitBounds(L.polyline(r.path).getBounds(), { padding: [30, 30] });
       this.follow = true;
+      this.startedAt = Date.now();
+      this.offAnnounced = false;
+      this.finished = false;
+      // Turn instructions mapped to their position along the route.
+      let from = 0;
+      this.turns = (r.steps || []).map(t => {
+        let best = from, bestD = Infinity;
+        for (let k = from; k < Math.min(this.samples.length, from + 400); k++) {
+          const dx = (this.samples[k].lng - t.lng) * this.kx, dy = (this.samples[k].lat - t.lat) * 110540;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = k; }
+        }
+        from = best;
+        return { ...t, idx: best, said: false };
+      }).filter(t => t.idx > 2 && t.idx < this.samples.length - 3);
+      Voice.say(`מתחילים. ${(r.distanceM / 1000).toFixed(1)} קילומטר.` + (this.turns[0] ? ' ' + turnText(this.turns[0]) + ' בהמשך.' : ''));
       this.watch = navigator.geolocation.watchPosition(p => this.update(p), () =>
         $('trackText').textContent = 'אין גישה למיקום. אשר גישה למיקום בדפדפן.', { enableHighAccuracy: true, maximumAge: 2000 });
       if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => this.lock = l).catch(() => {});
@@ -309,11 +413,36 @@
       const walked = this.idx * this.step, left = Math.max(0, this.route.distanceM - walked);
       const pct = Math.round(walked / this.route.distanceM * 100);
       let msg = `עברת ${(walked / 1000).toFixed(2)} ק״מ · נשארו ${(left / 1000).toFixed(2)} ק״מ (${pct}%)`;
-      if (off >= 60) msg = `⚠ סטית מהמסלול (כ-${Math.round(off)} מ׳). ` + msg;
-      if (left < 30 && this.idx > this.samples.length * 0.9) msg = '🎉 סיימת את המסלול!';
-      $('trackText').textContent = msg;
+      // Next turn: show it, and say it once when ~35 m away.
+      const next = this.turns.find(t => t.idx > this.idx);
+      let turnLine = '';
+      if (next) {
+        const dist = Math.round((next.idx - this.idx) * this.step / 10) * 10;
+        turnLine = `${TURN_ARROW[next.turn] || '↑'} בעוד ${dist} מ׳: ${turnText(next)}`;
+        if (!next.said && dist <= 35 && off < 60) {
+          next.said = true;
+          Voice.say(`עוד ${dist} מטר, ${turnText(next)}`);
+          Voice.buzz(/left/.test(next.turn) ? [150, 100, 150] : [400]);
+        }
+      }
+      if (off >= 60) {
+        msg = `⚠ סטית מהמסלול (כ-${Math.round(off)} מ׳). ` + msg;
+        if (!this.offAnnounced) { this.offAnnounced = true; Voice.say('סטית מהמסלול'); Voice.buzz([300, 100, 300, 100, 300]); }
+      } else this.offAnnounced = false;
+      if (left < 30 && this.idx > this.samples.length * 0.9) {
+        msg = '🎉 סיימת את המסלול!';
+        turnLine = '';
+        if (!this.finished) { this.finished = true; Voice.say('סיימת את המסלול. כל הכבוד!'); Voice.buzz([200, 100, 200, 100, 500]); }
+      }
+      this.walked = walked;
+      $('trackText').innerHTML = (turnLine ? `<div class="turn">${esc(turnLine)}</div>` : '') + esc(msg);
     },
     stop() {
+      if (this.active && this.walked > 200) {
+        addHistory({ date: Date.now(), walkedM: Math.round(this.walked), seconds: Math.round((Date.now() - this.startedAt) / 1000),
+          routeM: Math.round(this.route.distanceM), finished: !!this.finished });
+      }
+      this.walked = 0;
       if (this.watch != null) navigator.geolocation.clearWatch(this.watch);
       this.watch = null;
       if (this.lock) { this.lock.release().catch(() => {}); this.lock = null; }
@@ -368,8 +497,9 @@
       // Try a few extra directions and keep the best ones.
       const tries = Math.min(count + (terrain === 'any' ? 2 : 3), 9);
       setStatus(`מחשב מסלולים… 0/${tries}`);
+      const dir = $('direction').value;
       let routes = await LoopRouting.findLoops(startPoint, km * 1000, tries, Providers.fetchRoute,
-        (d, n) => setStatus(`מחשב מסלולים… ${d}/${n}`));
+        (d, n) => setStatus(`מחשב מסלולים… ${d}/${n}`), dir === 'any' ? {} : { direction: +dir });
       routes.forEach(r => { r.start = startPoint; });
       setStatus('בודק עליות…');
       const elevOk = await addElevation(routes);
@@ -411,6 +541,7 @@
 
   // ---------- Startup ----------
   renderFavs();
+  renderHist();
 
   // Opened from a shared link: ?s=lat,lng&w=lat,lng;lat,lng;...
   (async () => {

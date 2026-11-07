@@ -56,3 +56,13 @@ label.check input { width: auto; }
   body.walking #panel { height: 0; padding: 0; overflow: hidden; }
   body.walking #map { height: 100%; flex: 1; }
 }
+#settings summary { cursor: pointer; font-weight: 700; }
+[hidden] { display: none !important; }
+#trackText .turn { font-size: 1.15rem; font-weight: 800; margin-bottom: 4px; }
+.poi { font-size: 18px; line-height: 22px; text-align: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+#results .pois-line { font-size: .85rem; color: #44544a; margin-top: 4px; }
+#results .pois-line:empty { display: none; }
+#histBox summary { cursor: pointer; font-weight: 700; }
+.hist-summary { font-weight: 600; margin: 10px 0 6px; }
+#histList { list-style: none; padding: 0; margin: 0; font-size: .9rem; }
+#histList li { display: grid; grid-template-columns: 1.3fr 1fr 1fr .3fr; gap: 6px; padding: 6px 0; border-top: 1px solid #e3ebe6; }

@@ -91,11 +91,15 @@
   }
 
   /** Generate `count` loops in evenly spread directions. */
-  async function findLoops(start, targetM, count, fetchRoute, onProgress) {
-    const startBearing = Math.random() * 360;
+  // opts.direction (deg): keep all loops within about ±55° of that compass direction.
+  async function findLoops(start, targetM, count, fetchRoute, onProgress, opts = {}) {
+    const hasDir = typeof opts.direction === 'number';
+    const startBearing = hasDir ? opts.direction - 55 : Math.random() * 360;
+    const span = hasDir ? 110 : 360;
     let done = 0;
     const jobs = Array.from({ length: count }, (_, k) => {
-      const bearing = (startBearing + (360 / count) * k) % 360;
+      const frac = hasDir ? (count === 1 ? 0.5 : k / (count - 1)) : k / count;
+      const bearing = (startBearing + span * frac + 360) % 360;
       return findLoop(start, targetM, bearing, fetchRoute)
         .catch(e => ({ error: e }))
         .finally(() => onProgress && onProgress(++done, count));

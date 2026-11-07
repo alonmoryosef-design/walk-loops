@@ -43,6 +43,19 @@
         <option value="hilly">עם עליות</option>
       </select>
 
+      <label for="direction">כיוון</label>
+      <select id="direction">
+        <option value="any" selected>כל הכיוונים</option>
+        <option value="0">צפון</option>
+        <option value="45">צפון-מזרח</option>
+        <option value="90">מזרח</option>
+        <option value="135">דרום-מזרח</option>
+        <option value="180">דרום</option>
+        <option value="225">דרום-מערב</option>
+        <option value="270">מערב (בישראל: לכיוון הים)</option>
+        <option value="315">צפון-מערב</option>
+      </select>
+
       <label class="check" id="greenRow" hidden>
         <input type="checkbox" id="green"> להעדיף פארקים ורחובות שקטים
       </label>
@@ -58,6 +71,21 @@
 
     <ul id="results"></ul>
 
+    <details id="settings" class="card">
+      <summary>⚙️ הגדרות</summary>
+      <label for="orsKey">מפתח OpenRouteService</label>
+      <input id="orsKey" type="password" dir="ltr" autocomplete="off" placeholder="מדביקים כאן את המפתח">
+      <p class="hint">מפעיל את האפשרות "פארקים ורחובות שקטים" ומשמש גיבוי כשהשרת הציבורי עמוס. נשמר רק במכשיר הזה.</p>
+      <button type="button" id="saveOrs">שמירה</button>
+      <p id="orsSaved" class="status"></p>
+    </details>
+
+    <details id="histBox" class="card" hidden>
+      <summary>📊 ההליכות שלי</summary>
+      <p id="histSummary" class="hist-summary"></p>
+      <ul id="histList"></ul>
+    </details>
+
     <details id="favBox" class="card" hidden>
       <summary>★ המסלולים השמורים שלי (<span id="favCount">0</span>)</summary>
       <ul id="favList"></ul>
@@ -68,6 +96,7 @@
   <div id="trackBar" hidden>
     <div id="trackText"></div>
     <div class="track-actions">
+      <button type="button" id="trackVoice" title="הנחיות קוליות">🔊</button>
       <button type="button" id="trackCenter">📍 אליי</button>
       <button type="button" id="trackStop" class="stop">סיום</button>
     </div>

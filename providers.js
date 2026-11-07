@@ -19,7 +19,7 @@
   async function osrm(start, wps) {
     const pts = [start, ...wps, start].map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
     const base = cfg.OSRM_URL.replace(/\/$/, '');
-    const r = await fetch(`${base}/route/v1/foot/${pts}?overview=full&geometries=polyline`);
+    const r = await fetch(`${base}/route/v1/foot/${pts}?overview=full&geometries=polyline&steps=true`);
     if (r.status === 429) throw new Error('rate-limit');
     const data = await r.json();
     if (data.code !== 'Ok' || !data.routes || !data.routes[0]) throw new Error(data.message || data.code || 'no-route');
@@ -28,7 +28,35 @@
       distanceM: route.distance,
       durationS: route.distance / WALK_SPEED,
       path: LoopRouting.decodePolyline(route.geometry),
+      steps: osrmSteps(route),
     };
+  }
+
+  // Turn instructions in one shape for both routers: {lat, lng, turn, name}
+  // turn: left | right | slight left | slight right | sharp left | sharp right | uturn | roundabout
+  function osrmSteps(route) {
+    const out = [];
+    (route.legs || []).forEach(leg => (leg.steps || []).forEach(st => {
+      const m = st.maneuver || {};
+      if (['depart', 'arrive'].includes(m.type)) return;
+      let turn = m.modifier;
+      if (/roundabout|rotary/.test(m.type)) turn = 'roundabout';
+      if (!turn || turn === 'straight') return;
+      out.push({ lng: m.location[0], lat: m.location[1], turn, name: st.name || '' });
+    }));
+    return out;
+  }
+
+  const ORS_TURNS = { 0: 'left', 1: 'right', 2: 'sharp left', 3: 'sharp right', 4: 'slight left', 5: 'slight right', 7: 'roundabout', 9: 'uturn', 12: 'slight left', 13: 'slight right' };
+  function orsSteps(feature) {
+    const coords = feature.geometry.coordinates, out = [];
+    (feature.properties.segments || []).forEach(seg => (seg.steps || []).forEach(st => {
+      const turn = ORS_TURNS[st.type];
+      if (!turn) return;
+      const [lng, lat] = coords[st.way_points[0]];
+      out.push({ lat, lng, turn, name: st.name && st.name !== '-' ? st.name : '' });
+    }));
+    return out;
   }
 
   async function ors(start, wps) {
@@ -50,13 +78,23 @@
       distanceM: f.properties.summary.distance,
       durationS: f.properties.summary.duration,
       path: f.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+      steps: orsSteps(f),
     };
   }
 
   const impl = cfg.ROUTER === 'ors' ? ors : osrm; // 'osm-public' and 'osrm' both speak OSRM
   window.Providers = {
     prefs: { green: false }, // green/quiet streets (OpenRouteService only)
-    fetchRoute: (start, wps) => limit(() => impl(start, wps)),
+    // Green/quiet uses OpenRouteService; everything else uses the default router,
+    // falling back to OpenRouteService (when a key exists) if the default is busy or down.
+    fetchRoute: (start, wps) => limit(async () => {
+      if (window.Providers.prefs.green && cfg.ORS_KEY) return ors(start, wps);
+      try { return await impl(start, wps); }
+      catch (e) {
+        if (impl !== ors && cfg.ORS_KEY && (e.message === 'rate-limit' || e instanceof TypeError)) return ors(start, wps);
+        throw e;
+      }
+    }),
 
     async geocode(text) {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=he&countrycodes=il&q=' + encodeURIComponent(text);
@@ -82,6 +120,28 @@
         out.push(...data.elevation);
       }
       return out;
+    },
+
+    // Drinking water, toilets and benches within ~30 m of the route (OpenStreetMap / Overpass).
+    async pois(path) {
+      const pts = LoopRouting.samplePath(path, Math.min(120, Math.max(20, path.length)));
+      const line = pts.map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(',');
+      const q = `[out:json][timeout:25];(
+        node(around:30,${line})[amenity=drinking_water];
+        node(around:30,${line})[amenity=toilets];
+        node(around:20,${line})[amenity=bench];
+        node(around:20,${line})[leisure=picnic_table];
+      );out body;`;
+      const r = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST', body: 'data=' + encodeURIComponent(q),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+      if (!r.ok) throw new Error('pois-failed');
+      const data = await r.json();
+      return data.elements.map(e => ({
+        lat: e.lat, lng: e.lon,
+        kind: e.tags.amenity === 'drinking_water' ? 'water' : e.tags.amenity === 'toilets' ? 'toilet' : 'bench',
+      }));
     },
 
     async reverse(p) {
