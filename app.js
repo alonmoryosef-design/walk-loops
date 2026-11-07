@@ -19,7 +19,9 @@
   try { cfg.ORS_KEY = cfg.ORS_KEY || localStorage.getItem(ORS_STORE) || ''; } catch {}
   const refreshGreen = () => { $('greenRow').hidden = !(cfg.ROUTER === 'ors' || cfg.ORS_KEY || cfg.PROXY_URL); };
   refreshGreen();
-  if (cfg.PROXY_URL) $('settings').hidden = true; // the key lives on the server
+  // The key box is for the owner only: shown with #settings in the address, or once a key is saved.
+  // With the Cloudflare Worker connected it is never needed (the key lives on the server).
+  $('settings').hidden = !!cfg.PROXY_URL || !(location.hash === '#settings' || cfg.ORS_KEY);
   $('orsKey').value = cfg.ORS_KEY;
   $('saveOrs').addEventListener('click', () => {
     cfg.ORS_KEY = $('orsKey').value.trim();
