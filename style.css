@@ -39,7 +39,6 @@ label.check input { width: auto; }
 #results .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 #results .actions button { width: auto; margin: 0; padding: 7px 10px; font-size: .85rem; background: #e8efe9; color: #1d2b22; }
 #results .actions button.primary { background: var(--c); color: #fff; }
-#results .actions a { margin: 0 4px; }
 #favBox summary { cursor: pointer; font-weight: 700; }
 #favList { list-style: none; padding: 0; margin: 10px 0 0; }
 #favList li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e3ebe6; cursor: pointer; }

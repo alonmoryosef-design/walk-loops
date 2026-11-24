@@ -1,6 +1,6 @@
 // Network first, cache as fallback: updates show up right away, and the app
 // still opens (without new routes) when there's no signal.
-const CACHE = 'walk-loops-v1';
+const CACHE = 'walk-loops-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {

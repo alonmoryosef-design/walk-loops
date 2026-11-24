@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="מסלולי הליכה">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -104,7 +104,14 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // If something fails to load (old browser, blocked file), say so instead of a silent blank page.
+    window.addEventListener('error', function (e) {
+      var el = document.getElementById('status');
+      if (el && !el.textContent) el.textContent = (document.documentElement.lang === 'en' ? 'Something went wrong. Try opening the link in Chrome or Safari, or update your browser.' : 'משהו לא נטען. נסו לפתוח את הקישור בכרום או בספארי, או לעדכן את הדפדפן.');
+    });
+  </script>
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script src="i18n.js"></script>
   <script>I18N.apply();</script>
   <script src="config.js"></script>

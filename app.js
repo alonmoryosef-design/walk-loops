@@ -79,13 +79,6 @@
     return m < 60 ? t('min', { m }) : t('hm', { h: Math.floor(m / 60), m: m % 60 });
   }
 
-  // Opening a route in the Google Maps app is just a link: free, no key needed.
-  function mapsLink(start, wps) {
-    const f = p => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
-    return 'https://www.google.com/maps/dir/?api=1&travelmode=walking' +
-      `&origin=${f(start)}&destination=${f(start)}&waypoints=${encodeURIComponent(wps.map(f).join('|'))}`;
-  }
-
   function dirName(b) {
     return t('dirs')[Math.round(b / 45) % 8];
   }
@@ -181,7 +174,6 @@
           <button type="button" data-act="gpx">GPX</button>
           <button type="button" data-act="pois">${t('onTheWay')}</button>
           <button type="button" data-act="fav">${isFavorite(r) ? t('saved') : t('saveBtn')}</button>
-          <a href="${mapsLink(r.start || startPoint, r.waypoints)}" target="_blank" rel="noopener">Google Maps ↗</a>
         </div>`;
       li.addEventListener('click', e => {
         const act = e.target.dataset && e.target.dataset.act;
@@ -259,10 +251,9 @@
   const f5 = p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
   function routeUrl(r) {
     const u = new URL(location.href.split('?')[0].split('#')[0]);
-    u.searchParams.set('s', f5(r.start || startPoint));
-    u.searchParams.set('w', r.waypoints.map(f5).join(';'));
-    u.searchParams.set('km', (r.distanceM / 1000).toFixed(1));
-    return u.toString();
+    // Only digits, dots, minus and underscores, so WhatsApp/SMS never cut the link short.
+    const pts = [r.start || startPoint, ...r.waypoints];
+    return u.toString() + '?r=' + pts.map(p => `${p.lat.toFixed(5)}_${p.lng.toFixed(5)}`).join('_');
   }
 
   async function shareRoute(r) {
@@ -622,11 +613,20 @@
   // Opened from a shared link: ?s=lat,lng&w=lat,lng;lat,lng;...
   (async () => {
     const q = new URLSearchParams(location.search);
-    if (!q.get('s') || !q.get('w')) return;
-    const parse = t => { const [lat, lng] = t.split(',').map(Number); return { lat, lng }; };
+    let s, wps;
+    // New links: ?r=lat_lng_lat_lng_...  Older links: ?s=lat,lng&w=lat,lng;lat,lng
+    if (q.get('r')) {
+      const n = q.get('r').split('_').map(Number);
+      const pts = [];
+      for (let i = 0; i + 1 < n.length; i += 2) pts.push({ lat: n[i], lng: n[i + 1] });
+      [s, ...wps] = pts;
+    } else if (q.get('s') && q.get('w')) {
+      const parse = t => { const [lat, lng] = t.split(',').map(Number); return { lat, lng }; };
+      s = parse(q.get('s'));
+      wps = q.get('w').split(/[;|]/).map(parse);
+    } else return;
     try {
-      const s = parse(q.get('s'));
-      const wps = q.get('w').split(';').map(parse);
+      if (!s || !wps.length) throw new Error('bad link');
       if (![s, ...wps].every(p => isFinite(p.lat) && isFinite(p.lng)) || wps.length > 8) throw new Error('bad link');
       setStart(s);
       setStartText(f5(s));
